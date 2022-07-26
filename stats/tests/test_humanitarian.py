@@ -386,7 +386,7 @@ def test_humanitarian_sector_true_transaction_invalid_version(version, sector, x
 
 
 @pytest.mark.parametrize('major_version', ['1', '2'])
-@pytest.mark.parametrize('sector', [-89, 'not_a_code', HUMANITARIAN_SECTOR_CODES_5_DIGITS[0] + 1, HUMANITARIAN_SECTOR_CODES_3_DIGITS[0] + 1, HUMANITARIAN_SECTOR_CODES_5_DIGITS[-1] - 1, HUMANITARIAN_SECTOR_CODES_3_DIGITS[-1] - 1])
+@pytest.mark.parametrize('sector', [-89, 'not_a_code', 11110, 111, 12220, 122])
 @pytest.mark.parametrize('xml', ['''
         <iati-activity>
             <sector code="{0}" />
