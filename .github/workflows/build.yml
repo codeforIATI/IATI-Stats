@@ -68,7 +68,7 @@ jobs:
         mv metadata.json out
         mv licenses.json out
     - name: Run loop
-      run: python calculate_stats.py --output out/current loop
+      run: python calculate_stats.py --output out/current --multi 2 loop
     - name: Delete data and metadata
       run: rm -rf data metadata
     - name: Run aggregate
