@@ -44,7 +44,7 @@ This stats code expects a ``data/`` directory, containing a subdirectory for eac
 Getting started
 ---------------
 
-Take a look at `this Github Action <https://github.com/codeforIATI/IATI-Stats/blob/main/.github/workflows/run.yml>`__ to see how this code is used.
+Take a look at `this Github Action <https://github.com/codeforIATI/IATI-Stats/blob/main/.github/workflows/build.yml>`__ to see how this code is used.
 
 You can run ``python calculate_stats.py --help`` for a full list of command line options.
 
