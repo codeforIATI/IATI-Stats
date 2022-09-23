@@ -40,7 +40,7 @@ jobs:
         cd ..
     - name: Download IATI data
       run: |
-        wget -q -O iati_dump.zip https://gitlab.com/codeforIATI/iati-data/-/archive/main/iati-data-main.zip
+        wget -q -O iati_dump.zip $(wget -q -O - https://iati-data-dump.codeforiati.org/download)
         unzip -q iati_dump.zip
         mv iati-data-main/* .
         rm -rf iati_dump.zip iati-data-main
