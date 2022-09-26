@@ -6,7 +6,7 @@ You can choose a different set of tests by running calculate_stats.py with the `
 from __future__ import print_function
 from lxml import etree
 from datetime import date, datetime, timedelta
-from collections import defaultdict, OrderedDict
+from collections import Counter, defaultdict, OrderedDict
 from decimal import Decimal, InvalidOperation
 import os
 import re
@@ -1370,6 +1370,7 @@ class ActivityStats(CommonSharedElements):
         return out
 
     @returns_numberdictdictdict
+    @memoize
     def sum_transactions_by_type_by_year_usd(self):
         out = defaultdict(lambda: defaultdict(lambda: defaultdict(Decimal)))
 
@@ -1378,6 +1379,10 @@ class ActivityStats(CommonSharedElements):
         for transaction_type, data in list(self._sum_transactions_by_type_by_year().items()):
             for currency, years in list(data.items()):
                 for year, value in list(years.items()):
+                    # FIXME currently there's no currency data in this repo
+                    # after 2014, it is better to use 2014 than silently failing
+                    if year > 2014:
+                        year = 2014
                     if None not in [currency, value, year]:
                         out[transaction_type]['USD'][year] += get_USD_value(currency, value, year)
         return out
@@ -1443,6 +1448,28 @@ class ActivityStats(CommonSharedElements):
             if transaction_date(transaction) > self.today:
                 return 1
         return 0
+
+    @returns_numberdict
+    def provider_activity_id(self):
+        out = dict(Counter(self.element.xpath('transaction/provider-org/@provider-activity-id')))
+        if self.iati_identifier() in out:
+            del out[self.iati_identifier()]
+        return out
+
+    @returns_numberdictdict
+    def provider_activity_id_by_activity_id(self):
+        return {self.iati_identifier(): self.provider_activity_id()}
+
+    @returns_numberdict
+    def sum_commitments_and_disbursements_by_activity_id_usd(self):
+        # Handle 1.0x?
+        sum_commitments_by_year_by_year_usd = self.sum_transactions_by_type_by_year_usd().get('2', {}).get('USD', {})
+        sum_disbursements_by_year_by_year_usd = self.sum_transactions_by_type_by_year_usd().get('3', {}).get('USD', {})
+        sum_commitments_and_disbursements_usd = sum(sum_commitments_by_year_by_year_usd.values()) + sum(sum_disbursements_by_year_by_year_usd.values())
+        if sum_commitments_and_disbursements_usd:
+            return {self.iati_identifier(): sum_commitments_and_disbursements_usd}
+        else:
+            return {}
 
 
 ckan = json.load(open('helpers/ckan.json'))
@@ -1808,6 +1835,32 @@ class PublisherStats(object):
         if transaction_dates:
             return str(max(transaction_dates))
 
+    @returns_numberdict
+    def provider_activity_id_without_own(self):
+        out = {k: v for k, v in self.aggregated['provider_activity_id'].items() if k not in self.aggregated['iati_identifiers']}
+        return out
+
+    @returns_numberdict
+    def provider_activity_id_own_only(self):
+        out = defaultdict(int)
+        for activity_id, provider_activity_ids in self.aggregated['provider_activity_id_by_activity_id'].items():
+            if all(x in self.aggregated['iati_identifiers'] for x in provider_activity_ids):
+                for provider_activity_id, count in provider_activity_ids.items():
+                    out[provider_activity_id] += count
+        return out
+
+    @returns_numberdictdict
+    def sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd(self):
+        # These 2 by_publisher_id functions produce similar data to the invert
+        # step, but we have to include them here to make that data available in
+        # the AllDataStats step.
+        return {self.folder: self.aggregated['sum_commitments_and_disbursements_by_activity_id_usd']}
+
+    @returns_numberdictdict
+    def iati_identifiers_by_publisher_id(self):
+        # See comment on by_publisher_id above
+        return {self.folder: self.aggregated['iati_identifiers']}
+
 
 class OrganisationFileStats(GenericFileStats):
     """ Stats calculated for an IATI Organisation XML file. """
@@ -1847,3 +1900,39 @@ class AllDataStats(object):
     @returns_numberdict
     def _duplicate_identifiers(self):
         return {k: v for k, v in self.aggregated['iati_identifiers'].items() if v > 1}
+
+    @returns_numberdict
+    def traceable_sum_commitments_and_disbursements_by_publisher_id(self):
+        out = defaultdict(Decimal)
+        for publisher_id, d in self.aggregated['sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd'].items():
+            for k, v in d.items():
+                if k in self.aggregated['provider_activity_id_without_own']:
+                    out[publisher_id] += v
+        return out
+
+    @returns_numberdict
+    def traceable_sum_commitments_and_disbursements_by_publisher_id_denominator(self):
+        out = defaultdict(Decimal)
+        for publisher_id, d in self.aggregated['sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd'].items():
+            for k, v in d.items():
+                if k not in self.aggregated['provider_activity_id_own_only']:
+                    out[publisher_id] += v
+        return out
+
+    @returns_numberdict
+    def traceable_activities_by_publisher_id(self):
+        out = defaultdict(int)
+        for publisher_id, iati_identifiers_counts in self.aggregated['iati_identifiers_by_publisher_id'].items():
+            for iati_identifier, count in iati_identifiers_counts.items():
+                if iati_identifier in self.aggregated['provider_activity_id_without_own']:
+                    out[publisher_id] += count
+        return out
+
+    @returns_numberdict
+    def traceable_activities_by_publisher_id_denominator(self):
+        out = defaultdict(int)
+        for publisher_id, iati_identifiers_counts in self.aggregated['iati_identifiers_by_publisher_id'].items():
+            for iati_identifier, count in iati_identifiers_counts.items():
+                if iati_identifier not in self.aggregated['provider_activity_id_own_only']:
+                    out[publisher_id] += count
+        return out
