@@ -1460,12 +1460,12 @@ class ActivityStats(CommonSharedElements):
     def provider_activity_id_by_activity_id(self):
         return {self.iati_identifier(): self.provider_activity_id()}
 
+    def _sum_transactions(self, transaction_type):
+        return sum(self.sum_transactions_by_type_by_year_usd().get(transaction_type, {}).get('USD', {}).values())
+
     @returns_numberdict
     def sum_commitments_and_disbursements_by_activity_id_usd(self):
-        # Handle 1.0x?
-        sum_commitments_by_year_by_year_usd = self.sum_transactions_by_type_by_year_usd().get('2', {}).get('USD', {})
-        sum_disbursements_by_year_by_year_usd = self.sum_transactions_by_type_by_year_usd().get('3', {}).get('USD', {})
-        sum_commitments_and_disbursements_usd = sum(sum_commitments_by_year_by_year_usd.values()) + sum(sum_disbursements_by_year_by_year_usd.values())
+        sum_commitments_and_disbursements_usd = self._sum_transactions('C') + self._sum_transactions('2') + self._sum_transactions('D') + self._sum_transactions('3')
         if sum_commitments_and_disbursements_usd:
             return {self.iati_identifier(): sum_commitments_and_disbursements_usd}
         else:
