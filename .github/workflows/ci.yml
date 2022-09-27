@@ -30,6 +30,7 @@ jobs:
         ./get_codelists.sh
         echo '{}' > ckan.json
         touch registry_id_relationships.csv
+        wget -q https://codeforiati.org/imf-exchangerates/imf_exchangerates_A_ENDA_USD.csv -O currency_conversion/exchange_rates.csv
         cd ..
     - name: Run tests
       run: pytest --cov .
