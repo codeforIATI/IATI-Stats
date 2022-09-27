@@ -1840,15 +1840,6 @@ class PublisherStats(object):
         out = {k: v for k, v in self.aggregated['provider_activity_id'].items() if k not in self.aggregated['iati_identifiers']}
         return out
 
-    @returns_numberdict
-    def provider_activity_id_own_only(self):
-        out = defaultdict(int)
-        for activity_id, provider_activity_ids in self.aggregated['provider_activity_id_by_activity_id'].items():
-            if all(x in self.aggregated['iati_identifiers'] for x in provider_activity_ids):
-                for provider_activity_id, count in provider_activity_ids.items():
-                    out[provider_activity_id] += count
-        return out
-
     @returns_numberdictdict
     def sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd(self):
         # These 2 by_publisher_id functions produce similar data to the invert
@@ -1915,8 +1906,7 @@ class AllDataStats(object):
         out = defaultdict(Decimal)
         for publisher_id, d in self.aggregated['sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd'].items():
             for k, v in d.items():
-                if k not in self.aggregated['provider_activity_id_own_only']:
-                    out[publisher_id] += v
+                out[publisher_id] += v
         return out
 
     @returns_numberdict
@@ -1933,6 +1923,5 @@ class AllDataStats(object):
         out = defaultdict(int)
         for publisher_id, iati_identifiers_counts in self.aggregated['iati_identifiers_by_publisher_id'].items():
             for iati_identifier, count in iati_identifiers_counts.items():
-                if iati_identifier not in self.aggregated['provider_activity_id_own_only']:
-                    out[publisher_id] += count
+                out[publisher_id] += count
         return out
