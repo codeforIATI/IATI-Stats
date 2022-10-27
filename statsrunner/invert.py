@@ -18,7 +18,7 @@ def invert_dir(basedirname, out_filename, output_dir):
         for f in files:
             with open(os.path.join(dirname, f)) as fp:
                 stats_name = f[:-5]
-                if stats_name in ["iati_identifiers", "by_hierarchy", "bottom_hierarchy"]:
+                if stats_name in ["iati_identifiers", "by_hierarchy", "bottom_hierarchy"] or stats_name.startswith("traceable_"):
                     continue
                 stats_values = json.load(fp)
                 if type(stats_values) == dict:
