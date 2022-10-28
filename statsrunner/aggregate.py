@@ -149,3 +149,11 @@ def aggregate(args):
                                'aggregated',
                                aggregate_name + '.json'), 'w') as fp:
             json.dump(common.sort_keys(aggregate), fp, indent=2, default=decimal_default)
+
+    for aggregate_name, aggregate in total.items():
+        if aggregate_name.startswith("traceable_"):
+            for publisher in aggregate:
+                filename = os.path.join(args.output, 'aggregated-publisher', publisher, aggregate_name + '.json')
+                value = aggregate[publisher]
+                with open(filename, 'w') as fp:
+                    json.dump(value, fp, indent=2, default=decimal_default)
