@@ -6,7 +6,7 @@ You can choose a different set of tests by running calculate_stats.py with the `
 from __future__ import print_function
 from lxml import etree
 from datetime import date, datetime, timedelta
-from collections import defaultdict, OrderedDict
+from collections import Counter, defaultdict, OrderedDict
 from decimal import Decimal, InvalidOperation
 import os
 import re
@@ -140,13 +140,54 @@ for major_version in ['1', '2']:
         'SectorCategory',
         'DocumentCategory',
         'AidType',
-        'BudgetNotProvided'
+        'BudgetNotProvided',
+        'OrganisationRegistrationAgency',
+        'CRSChannelCode'
     ]:
         CODELISTS[major_version][codelist_name] = set(
             c['code'] for c in json.load(
                 open('helpers/codelists/{}/{}.json'.format(major_version, codelist_name))
             )['data']
         )
+
+
+def build_org_prefix_list():
+    """Build lists of valid organisation identifier prefixes"""
+    out = {}
+    for major_version in ('1', '2'):
+        out[major_version] = defaultdict(list)
+        for prefix in CODELISTS[major_version]['OrganisationRegistrationAgency']:
+            out[major_version][len(prefix)].append(prefix)
+    return out
+
+
+org_prefix_list = build_org_prefix_list()
+
+
+def build_channel_code_list():
+    """Build lists of CRS Channel Codes"""
+    out = {}
+    for major_version in ('1', '2'):
+        out[major_version] = defaultdict(list)
+        for code in CODELISTS[major_version]['CRSChannelCode']:
+            out[major_version][code[:2]].append(code)
+    return out
+
+
+channel_code_list = build_channel_code_list()
+
+
+def valid_org_prefix(major_version, org_id):
+    """Organisation identifier has valid prefix"""
+    for n in org_prefix_list[major_version]:
+        for prefix in org_prefix_list[major_version][n]:
+            if org_id.startswith(prefix):
+                return True, prefix
+    for n in channel_code_list[major_version]:
+        for code in channel_code_list[major_version][n]:
+            if org_id.startswith(code):
+                return True, code
+    return False, str(None)
 
 
 # Import country language mappings, and save as a dictionary
@@ -973,7 +1014,7 @@ class ActivityStats(CommonSharedElements):
         activity_actual_end_dates = [iso_date(x) for x in self.element.xpath('activity-date[@type="{}"]'.format(self._actual_end_code())) if iso_date(x)]
 
         # If there is no planned end date AND activity-status/@code is 2 (implementing) or 4 (post-completion), then this is a current activity
-        if not(activity_planned_end_dates) and activity_status_code:
+        if not activity_planned_end_dates and activity_status_code:
             if activity_status_code[0] == '2' or activity_status_code[0] == '4':
                 self.comprehensiveness_current_activity_status = 1
                 return True
@@ -1370,6 +1411,7 @@ class ActivityStats(CommonSharedElements):
         return out
 
     @returns_numberdictdictdict
+    @memoize
     def sum_transactions_by_type_by_year_usd(self):
         out = defaultdict(lambda: defaultdict(lambda: defaultdict(Decimal)))
 
@@ -1378,6 +1420,10 @@ class ActivityStats(CommonSharedElements):
         for transaction_type, data in list(self._sum_transactions_by_type_by_year().items()):
             for currency, years in list(data.items()):
                 for year, value in list(years.items()):
+                    # FIXME currently there's no currency data in this repo
+                    # after 2014, it is better to use 2014 than silently failing
+                    if year > 2014:
+                        year = 2014
                     if None not in [currency, value, year]:
                         out[transaction_type]['USD'][year] += get_USD_value(currency, value, year)
         return out
@@ -1443,6 +1489,176 @@ class ActivityStats(CommonSharedElements):
             if transaction_date(transaction) > self.today:
                 return 1
         return 0
+
+    @returns_numberdict
+    def provider_activity_id(self):
+        out = dict(Counter(self.element.xpath('transaction/provider-org/@provider-activity-id')))
+        if self.iati_identifier() in out:
+            del out[self.iati_identifier()]
+        return out
+
+    @returns_numberdictdict
+    def provider_activity_id_by_activity_id(self):
+        return {self.iati_identifier(): self.provider_activity_id()}
+
+    def _sum_transactions(self, transaction_type):
+        return sum(self.sum_transactions_by_type_by_year_usd().get(transaction_type, {}).get('USD', {}).values())
+
+    @returns_numberdict
+    def sum_commitments_and_disbursements_by_activity_id_usd(self):
+        sum_commitments_and_disbursements_usd = self._sum_transactions('C') + self._sum_transactions('2') + self._sum_transactions('D') + self._sum_transactions('3')
+        if sum_commitments_and_disbursements_usd:
+            return {self.iati_identifier(): sum_commitments_and_disbursements_usd}
+        else:
+            return {}
+
+    def _reporting_org_ref(self):
+        """Reference for activity reporting organisation"""
+        for org in self.element.findall('reporting-org'):
+            ref = org.attrib.get('ref')
+            if ref:
+                return ref
+        return None
+
+    def _check_org_reference(self, org, reporting_org, stat_type, out, prefixes=False):
+        """Calculate stat_type and add to out, if stat_type is total_valid_refs and prefixes
+           is True return increment counts in default dict of prefixes"""
+        ref = org.attrib.get('ref')
+        if ref is not None:
+            if stat_type == 'total_refs':
+                out += 1
+            else:
+                if ref:
+                    if stat_type == 'total_full_refs':
+                        out += 1
+                    else:
+                        if ref != reporting_org:
+                            if stat_type == 'total_notself_refs':
+                                out += 1
+                            elif stat_type == 'total_valid_refs':
+                                valid, prefix = valid_org_prefix(self._major_version(), ref)
+                                if prefixes:
+                                    out[prefix] += 1
+                                else:
+                                    if valid:
+                                        out += 1
+        return out
+
+    def _participating_org_stats(self, org_type_id, stat_type, prefixes=False):
+        """Calculate stat_type for participating organisation role id for activity"""
+        reporting_org = self._reporting_org_ref()
+        out = defaultdict(int) if prefixes else 0
+        for org in self.element.findall('participating-org'):
+            role = org.attrib.get('role')
+            if role and role == org_type_id:
+                if stat_type == 'total':
+                    out += 1
+                else:
+                    if prefixes:
+                        self._check_org_reference(org, reporting_org, stat_type, out, prefixes)
+                    else:
+                        out = self._check_org_reference(org, reporting_org, stat_type, out, prefixes)
+        return out
+
+    def _transaction_org_stats(self, org_type, stat_type, prefixes=False):
+        """Calculate stat_type for transaction organisation type"""
+        reporting_org = self._reporting_org_ref()
+        out = defaultdict(int) if prefixes else 0
+        for transaction in self.element.findall('transaction'):
+            org = transaction.find(org_type)
+            if org is not None:
+                if stat_type == 'total':
+                    out += 1
+                else:
+                    if prefixes:
+                        self._check_org_reference(org, reporting_org, stat_type, out, prefixes)
+                    else:
+                        out = self._check_org_reference(org, reporting_org, stat_type, out, prefixes)
+        return out
+
+    def _participating_org_all_stats(self, org_type_id):
+        """Calculate all statistics for activity participating organisation type"""
+        return {'total_orgs': self._participating_org_stats(org_type_id, 'total'),
+                'total_refs': self._participating_org_stats(org_type_id, 'total_refs'),
+                'total_full_refs': self._participating_org_stats(org_type_id, 'total_full_refs'),
+                'total_notself_refs': self._participating_org_stats(org_type_id, 'total_notself_refs'),
+                'total_valid_refs': self._participating_org_stats(org_type_id, 'total_valid_refs')}
+
+    def _transaction_org_all_stats(self, org_type):
+        """Calculate all statistics for transaction organisation type"""
+        return {'total_orgs': self._transaction_org_stats(org_type, 'total'),
+                'total_refs': self._transaction_org_stats(org_type, 'total_refs'),
+                'total_full_refs': self._transaction_org_stats(org_type, 'total_full_refs'),
+                'total_notself_refs': self._transaction_org_stats(org_type, 'total_notself_refs'),
+                'total_valid_refs': self._transaction_org_stats(org_type, 'total_valid_refs')}
+
+    @returns_numberdict
+    def funding_org_transaction_stats(self):
+        """Calculate all statistics for activity funding organisation"""
+        return self._participating_org_all_stats('1')
+
+    @returns_numberdict
+    def funding_org_valid_prefixes(self):
+        """Calculate activity funding organisation valid prefix counts"""
+        return self._participating_org_stats('1', 'total_valid_refs', prefixes=True)
+
+    @returns_numberdict
+    def accountable_org_transaction_stats(self):
+        """Calculate all statistics for activity accountable organisation"""
+        return self._participating_org_all_stats('2')
+
+    @returns_numberdict
+    def accountable_org_valid_prefixes(self):
+        """Calculate activity accountable organisation valid prefix counts"""
+        return self._participating_org_stats('2', 'total_valid_refs', prefixes=True)
+
+    @returns_numberdict
+    def extending_org_transaction_stats(self):
+        """Calculate all statistics for activity extending organisation"""
+        return self._participating_org_all_stats('3')
+
+    @returns_numberdict
+    def extending_org_valid_prefixes(self):
+        """Calculate activity extending organisation valid prefix counts"""
+        return self._participating_org_stats('3', 'total_valid_refs', prefixes=True)
+
+    @returns_numberdict
+    def implementing_org_transaction_stats(self):
+        """Calculate all statistics for activity implementing organisation"""
+        return self._participating_org_all_stats('4')
+
+    @returns_numberdict
+    def implementing_org_valid_prefixes(self):
+        """Calculate activity implementing organisation valid prefix counts"""
+        return self._participating_org_stats('4', 'total_valid_refs', prefixes=True)
+
+    @returns_numberdict
+    def provider_org_transaction_stats(self):
+        """Calculate all statistics for activity transactions provider organisation"""
+        return self._transaction_org_all_stats('provider-org')
+
+    @returns_numberdict
+    def provider_org_valid_prefixes(self):
+        """Calculate activity transaction provider organisation valid prefix counts"""
+        return self._transaction_org_stats('provider-org', 'total_valid_refs', prefixes=True)
+
+    @returns_numberdict
+    def receiver_org_transaction_stats(self):
+        """Calculate all statistics for activity transactions receiver organisation"""
+        return self._transaction_org_all_stats('receiver-org')
+
+    @returns_numberdict
+    def receiver_org_valid_prefixes(self):
+        """Calculate activity transaction receiver organisation valid prefix counts"""
+        return self._transaction_org_stats('receiver-org', 'total_valid_refs', prefixes=True)
+
+    @returns_number
+    def transaction_total(self):
+        """Calculate activity transaction counts"""
+        out = 0
+        for transaction in self.element.findall('transaction'):
+            out += 1
+        return out
 
 
 ckan = json.load(open('helpers/ckan.json'))
@@ -1808,6 +2024,23 @@ class PublisherStats(object):
         if transaction_dates:
             return str(max(transaction_dates))
 
+    @returns_numberdict
+    def provider_activity_id_without_own(self):
+        out = {k: v for k, v in self.aggregated['provider_activity_id'].items() if k not in self.aggregated['iati_identifiers']}
+        return out
+
+    @returns_numberdictdict
+    def sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd(self):
+        # These 2 by_publisher_id functions produce similar data to the invert
+        # step, but we have to include them here to make that data available in
+        # the AllDataStats step.
+        return {self.folder: self.aggregated['sum_commitments_and_disbursements_by_activity_id_usd']}
+
+    @returns_numberdictdict
+    def iati_identifiers_by_publisher_id(self):
+        # See comment on by_publisher_id above
+        return {self.folder: self.aggregated['iati_identifiers']}
+
 
 class OrganisationFileStats(GenericFileStats):
     """ Stats calculated for an IATI Organisation XML file. """
@@ -1847,3 +2080,37 @@ class AllDataStats(object):
     @returns_numberdict
     def _duplicate_identifiers(self):
         return {k: v for k, v in self.aggregated['iati_identifiers'].items() if v > 1}
+
+    @returns_numberdict
+    def traceable_sum_commitments_and_disbursements_by_publisher_id(self):
+        out = defaultdict(Decimal)
+        for publisher_id, d in self.aggregated['sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd'].items():
+            for k, v in d.items():
+                if k in self.aggregated['provider_activity_id_without_own']:
+                    out[publisher_id] += v
+        return out
+
+    @returns_numberdict
+    def traceable_sum_commitments_and_disbursements_by_publisher_id_denominator(self):
+        out = defaultdict(Decimal)
+        for publisher_id, d in self.aggregated['sum_commitments_and_disbursements_by_activity_id_by_publisher_id_usd'].items():
+            for k, v in d.items():
+                out[publisher_id] += v
+        return out
+
+    @returns_numberdict
+    def traceable_activities_by_publisher_id(self):
+        out = defaultdict(int)
+        for publisher_id, iati_identifiers_counts in self.aggregated['iati_identifiers_by_publisher_id'].items():
+            for iati_identifier, count in iati_identifiers_counts.items():
+                if iati_identifier in self.aggregated['provider_activity_id_without_own']:
+                    out[publisher_id] += count
+        return out
+
+    @returns_numberdict
+    def traceable_activities_by_publisher_id_denominator(self):
+        out = defaultdict(int)
+        for publisher_id, iati_identifiers_counts in self.aggregated['iati_identifiers_by_publisher_id'].items():
+            for iati_identifier, count in iati_identifiers_counts.items():
+                out[publisher_id] += count
+        return out

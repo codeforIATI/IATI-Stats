@@ -9,6 +9,8 @@ wget "https://codelists.codeforiati.org/api/1/json/en/SectorCategory.json" -O co
 wget "https://codelists.codeforiati.org/api/1/json/en/DocumentCategory.json" -O codelists/1/DocumentCategory.json
 wget "https://codelists.codeforiati.org/api/1/json/en/AidType.json" -O codelists/1/AidType.json
 wget "https://codelists.codeforiati.org/api/1/json/en/BudgetNotProvided.json" -O codelists/1/BudgetNotProvided.json
+wget "https://codelists.codeforiati.org/api/1/json/en/OrganisationRegistrationAgency.json" -O codelists/1/OrganisationRegistrationAgency.json
+wget "https://codelists.codeforiati.org/api/1/json/en/CRSChannelCode.json" -O codelists/1/CRSChannelCode.json
 
 mkdir -p codelists/2
 wget "https://codelists.codeforiati.org/api/json/en/Version.json" -O codelists/2/Version.json
@@ -19,3 +21,5 @@ wget "https://codelists.codeforiati.org/api/json/en/SectorCategory.json" -O code
 wget "https://codelists.codeforiati.org/api/json/en/DocumentCategory.json" -O codelists/2/DocumentCategory.json
 wget "https://codelists.codeforiati.org/api/json/en/AidType.json" -O codelists/2/AidType.json
 wget "https://codelists.codeforiati.org/api/json/en/BudgetNotProvided.json" -O codelists/2/BudgetNotProvided.json
+wget "https://codelists.codeforiati.org/api/json/en/OrganisationRegistrationAgency.json" -O codelists/2/OrganisationRegistrationAgency.json
+wget "https://codelists.codeforiati.org/api/json/en/CRSChannelCode.json" -O codelists/2/CRSChannelCode.json
