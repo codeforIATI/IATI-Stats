@@ -5,6 +5,7 @@ on:
       - dev
   schedule:
     - cron: '0 1 * * *'
+  workflow_dispatch:
 jobs:
   generate_stats:
     runs-on: ubuntu-latest
