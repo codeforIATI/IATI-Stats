@@ -1497,10 +1497,6 @@ class ActivityStats(CommonSharedElements):
             del out[self.iati_identifier()]
         return out
 
-    @returns_numberdictdict
-    def provider_activity_id_by_activity_id(self):
-        return {self.iati_identifier(): self.provider_activity_id()}
-
     def _sum_transactions(self, transaction_type):
         return sum(self.sum_transactions_by_type_by_year_usd().get(transaction_type, {}).get('USD', {}).values())
 
