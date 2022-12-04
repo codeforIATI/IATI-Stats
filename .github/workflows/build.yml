@@ -23,10 +23,10 @@ jobs:
       with:
         persist-credentials: false
     - name: Set up Python 3.7
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
         python-version: 3.7
-    - uses: actions/cache@v2
+    - uses: actions/cache@v3
       name: Cache dependencies
       with:
         path: ~/.cache/pip
@@ -93,15 +93,15 @@ jobs:
     #   run: cp -r static/* out
     - name: Deploy (production) 🚀
       if: github.ref == 'refs/heads/main'
-      uses: JamesIves/github-pages-deploy-action@3.7.1
+      uses: JamesIves/github-pages-deploy-action@v4
       with:
-        GIT_CONFIG_NAME: Code for IATI bot
-        GIT_CONFIG_EMAIL: 57559326+codeforIATIbot@users.noreply.github.com
-        GITHUB_TOKEN: ${{ secrets.TOKEN }}
-        REPOSITORY_NAME: codeforIATI/IATI-Stats-public
-        BRANCH: gh-pages
-        FOLDER: out
-        CLEAN: true
+        git-config-name: Code for IATI bot
+        git-config-email: 57559326+codeforIATIbot@users.noreply.github.com
+        token: ${{ secrets.TOKEN }}
+        repository-name: codeforIATI/IATI-Stats-public
+        branch: gh-pages
+        folder: out
+        clean: true
     - name: Trigger a build on the analytics repo
       if: github.ref == 'refs/heads/main'
       uses: peter-evans/repository-dispatch@v1
@@ -111,12 +111,12 @@ jobs:
         event-type: build
     - name: Deploy (dev) 🚀
       if: github.ref == 'refs/heads/dev'
-      uses: JamesIves/github-pages-deploy-action@3.7.1
+      uses: JamesIves/github-pages-deploy-action@v4
       with:
-        GIT_CONFIG_NAME: Code for IATI bot
-        GIT_CONFIG_EMAIL: 57559326+codeforIATIbot@users.noreply.github.com
-        GITHUB_TOKEN: ${{ secrets.TOKEN }}
-        REPOSITORY_NAME: codeforIATI/IATI-Stats-dev
-        BRANCH: gh-pages
-        FOLDER: out
-        CLEAN: true
+        git-config-name: Code for IATI bot
+        git-config-email: 57559326+codeforIATIbot@users.noreply.github.com
+        token: ${{ secrets.TOKEN }}
+        repository-name: codeforIATI/IATI-Stats-dev
+        branch: gh-pages
+        folder: out
+        clean: true
