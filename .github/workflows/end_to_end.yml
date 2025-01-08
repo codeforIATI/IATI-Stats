@@ -2,7 +2,7 @@ name: End to end tests
 on: [push, pull_request]
 jobs:
   generate_stats:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04  # supports python 3.7
     steps:
     - name: Checkout this repo
       uses: actions/checkout@v2
