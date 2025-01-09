@@ -50,14 +50,14 @@ jobs:
         rm -rf iati_dump.zip iati-data-main
     - name: Checkout output (production)
       if: github.ref == 'refs/heads/main'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
         repository: codeforIATI/IATI-Stats-public
         path: out
     - name: Checkout output (dev)
       if: github.ref == 'refs/heads/dev'
-      uses: actions/checkout@v2
+      uses: actions/checkout@v4
       with:
         persist-credentials: false
         repository: codeforIATI/IATI-Stats-dev
